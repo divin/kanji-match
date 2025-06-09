@@ -1,0 +1,3 @@
+[submodule "typing"]
+	path = typing
+	url = https://github.com/LuaCATS/love2d.git
