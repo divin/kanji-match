@@ -1,0 +1,10 @@
+{
+  "$schema": "https://raw.githubusercontent.com/sumneko/vscode-lua/master/setting/schema.json",
+  "format.enable": true,
+  "runtime.version": "Lua 5.1",
+  "workspace.library": ["typing/"],
+  "runtime.special": {
+    "love.filesystem.load": "loadfile"
+  },
+  "hint.enable": true
+}
