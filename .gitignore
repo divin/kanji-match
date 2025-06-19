@@ -1,2 +1,3 @@
 *.love
 kanji_groups.json
+.DS_Store
