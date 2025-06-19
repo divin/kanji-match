@@ -6,5 +6,6 @@
   "runtime.special": {
     "love.filesystem.load": "loadfile"
   },
-  "hint.enable": true
+  "hint.enable": true,
+  "diagnostics.disable": ["duplicate-set-field"]
 }

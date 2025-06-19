@@ -301,10 +301,10 @@ function GameScene:shootConfetti(direction)
 
     -- Determine cannon position
     local margin = 0
-    local x = nil
-    local y = nil
-    local minAngle = nil
-    local maxAngle = nil
+    local x = margin
+    local y = margin
+    local minAngle = 15
+    local maxAngle = 60
     if direction == "upper-left" then
         x = margin
         y = margin
