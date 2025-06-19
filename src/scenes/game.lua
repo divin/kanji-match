@@ -27,6 +27,16 @@ function GameScene:load()
     self.completedCards = nil
     self.selectedCards = {}
 
+    -- Streak tracking for pitch modification
+    self.streak = 0
+    self.streakConfig = {
+        basePitch = 1.0,       -- Starting pitch for correct sound
+        pitchIncrement = 0.15, -- How much pitch increases per streak
+        maxPitch = 2.5,        -- Maximum pitch cap
+        maxStreakDisplay = 10, -- Show streak counter up to this number
+        resetOnMiss = true     -- Whether to reset streak on incorrect match
+    }
+
     -- SRS tracking
     self.srsStates = self:loadSRSStates()
     self.dueGroups = self:getDueGroups()
@@ -34,6 +44,7 @@ function GameScene:load()
 
     self.kanjiFont = love.graphics.newFont(SETTINGS.font, 40)
     self.meaningFont = love.graphics.newFont(SETTINGS.font, 14)
+    self.streakFont = love.graphics.newFont(SETTINGS.font, 24)
 
     self:loadNextGroup()
 end
@@ -114,8 +125,9 @@ function GameScene:loadNextGroup()
         setCardData = shuffleTable(setCardData)
 
         -- Create card objects positioned on screen
+        local topMargin = 32 -- Space for streak counter and padding
         local startX = (screenWidth - totalWidth) / 2
-        local startY = (screenHeight - totalHeight) / 2
+        local startY = ((screenHeight - totalHeight) / 2) + topMargin
 
         for i = 1, #setCardData do
             local row = math.ceil(i / self.maxCols)
@@ -268,19 +280,29 @@ function GameScene:loadNextSet()
     return true
 end
 
+function GameScene:addSelectedCard(card)
+    love.audio.stop(SOUND_SOURCES.click)
+    love.audio.play(SOUND_SOURCES.click)
+    table.insert(self.selectedCards, card)
+end
+
+function GameScene:removeSelectedCard(card)
+    love.audio.stop(SOUND_SOURCES.unclick)
+    love.audio.play(SOUND_SOURCES.unclick)
+    for i = #self.selectedCards, 1, -1 do
+        if self.selectedCards[i] == card then
+            table.remove(self.selectedCards, i)
+            break
+        end
+    end
+end
+
 function GameScene:onCardClicked(card)
+    print("Card clicked:", card.text, "Type:", card.type)
     -- Check if card is already selected - if so, deselect it
     if card.isSelected then
         card.isSelected = false
-        love.audio.play(SOUND_SOURCES.unclick)
-
-        -- Remove from selectedCards
-        for i = #self.selectedCards, 1, -1 do
-            if self.selectedCards[i] == card then
-                table.remove(self.selectedCards, i)
-                break
-            end
-        end
+        self:removeSelectedCard(card)
         return
     end
 
@@ -291,14 +313,27 @@ function GameScene:onCardClicked(card)
 
     -- Select the card
     card.isSelected = true
-    love.audio.play(SOUND_SOURCES.click)
-    table.insert(self.selectedCards, card)
+    self:addSelectedCard(card)
 
     if #self.selectedCards == 2 then
         local a, b = unpack(self.selectedCards)
 
         if a.pairId == b.pairId then
             print("Matched!", a.text, b.text)
+
+            -- Increase streak and calculate new pitch
+            self.streak = self.streak + 1
+            local newPitch = math.min(
+                self.streakConfig.basePitch + (self.streak * self.streakConfig.pitchIncrement),
+                self.streakConfig.maxPitch
+            )
+
+            print("Streak: " .. self.streak .. ", Pitch: " .. string.format("%.2f", newPitch))
+
+            -- Apply pitch and play correct sound
+            love.audio.stop(SOUND_SOURCES.click)
+            love.audio.stop(SOUND_SOURCES.correct)
+            SOUND_SOURCES.correct:setPitch(newPitch)
             love.audio.play(SOUND_SOURCES.correct)
 
             -- Update SRS state for successful match
@@ -334,6 +369,17 @@ function GameScene:onCardClicked(card)
             end
         else
             print("No match:", a.text, b.text)
+
+            -- Reset streak on incorrect match (if configured to do so)
+            if self.streakConfig.resetOnMiss then
+                self.streak = 0
+                print("Streak reset to 0")
+
+                -- Reset pitch to base value
+                SOUND_SOURCES.correct:setPitch(self.streakConfig.basePitch)
+            end
+
+            love.audio.stop(SOUND_SOURCES.incorrect)
             love.audio.play(SOUND_SOURCES.incorrect)
 
             -- Update SRS state for failed match only if not already failed in this set
@@ -395,6 +441,27 @@ function GameScene:draw()
         for _, card in ipairs(self.currentSet) do
             card:draw()
         end
+    end
+
+    -- Draw streak counter
+    if self.streak > 0 and self.streak <= self.streakConfig.maxStreakDisplay then
+        love.graphics.setFont(self.streakFont)
+        -- Color based on streak level (yellow -> orange -> red)
+        local intensity = math.min(self.streak / 5, 1)
+        love.graphics.setColor(1, 1 - intensity * 0.5, 1 - intensity, 1)
+
+        local streakText = "Streak: " .. self.streak
+        local textWidth = self.streakFont:getWidth(streakText)
+        love.graphics.print(streakText, love.graphics.getWidth() - textWidth - 20, 20)
+        love.graphics.setColor(1, 1, 1, 1) -- Reset color
+    elseif self.streak > self.streakConfig.maxStreakDisplay then
+        love.graphics.setFont(self.streakFont)
+        love.graphics.setColor(1, 0.2, 0.2, 1) -- Bright red for high streaks
+
+        local streakText = "Streak: " .. self.streak .. "!"
+        local textWidth = self.streakFont:getWidth(streakText)
+        love.graphics.print(streakText, love.graphics.getWidth() - textWidth - 20, 20)
+        love.graphics.setColor(1, 1, 1, 1) -- Reset color
     end
 end
 
