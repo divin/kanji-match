@@ -39,6 +39,11 @@ function BaseScene:draw()
     -- print("BaseScene:draw")
 end
 
+-- LÖVE text input callback.
+function BaseScene:textinput(t)
+    -- print("BaseScene:textinput", t)
+end
+
 -- LÖVE input callback.
 function BaseScene:keypressed(key, scancode, isrepeat)
     -- print("BaseScene:keypressed", key, scancode, isrepeat)

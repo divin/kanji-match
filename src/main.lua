@@ -28,7 +28,7 @@ function love.load()
     love.graphics.setBackgroundColor(r, g, b)
 
     -- Load a scence, register it, and switch to it
-    local scene = require("scenes.demos.httpsExample")
+    local scene = require("scenes.demos.textInputExample")
     SCENE_MANAGER:register("InitialScene", scene)
     SCENE_MANAGER:switchTo("InitialScene")
 end
@@ -45,6 +45,12 @@ function love.draw()
     end
 end
 
+function love.textinput(t)
+    if SCENE_MANAGER.currentScene and SCENE_MANAGER.currentScene.textinput then
+        SCENE_MANAGER.currentScene:textinput(t)
+    end
+end
+
 function love.keypressed(key, scancode, isrepeat)
     if SCENE_MANAGER.currentScene and SCENE_MANAGER.currentScene.keypressed then
         SCENE_MANAGER.currentScene:keypressed(key, scancode, isrepeat)
@@ -52,7 +58,7 @@ function love.keypressed(key, scancode, isrepeat)
 end
 
 function love.keyreleased(key, scancode)
-    if SCENE_MANAGER.currentScene and SCENE_MANAGER.currentScene.keypressed then
+    if SCENE_MANAGER.currentScene and SCENE_MANAGER.currentScene.keyreleased then
         SCENE_MANAGER.currentScene:keyreleased(key, scancode)
     end
 end
