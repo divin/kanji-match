@@ -23,7 +23,7 @@ SOUND_SOURCES = {
 function love.load()
     -- Initialize LÖVE settings
     love.window.setTitle("Kanji Match")
-    love.window.setMode(800, 600, { resizable = false, vsync = true })
+    love.window.setMode(960, 720, { resizable = false, vsync = true })
     local r, g, b = love.math.colorFromBytes(98, 109, 115)
     love.graphics.setBackgroundColor(r, g, b)
 
