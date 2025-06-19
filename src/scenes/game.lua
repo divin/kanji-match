@@ -3,6 +3,7 @@ local BaseScene = require("scenes.baseScene")
 local shuffleTable = require("utils.shuffleTable")
 local getKanjiDataForLevel = require("utils.kanjiData")
 local srsFunc = require("utils.spaceRepetition")
+local Confetti = require("objects.confetti")
 
 -- Create a new scene object, inheriting from BaseScene
 local GameScene = BaseScene:new()
@@ -45,6 +46,20 @@ function GameScene:load()
     self.kanjiFont = love.graphics.newFont(SETTINGS.font, 40)
     self.meaningFont = love.graphics.newFont(SETTINGS.font, 14)
     self.streakFont = love.graphics.newFont(SETTINGS.font, 24)
+
+    -- Initialize confetti
+    self.confetti = {}
+    self.colors = {
+        { 1,   0.2, 0.2 }, -- Red
+        { 0.2, 1,   0.2 }, -- Green
+        { 0.2, 0.2, 1 },   -- Blue
+        { 1,   1,   0.2 }, -- Yellow
+        { 1,   0.2, 1 },   -- Magenta
+        { 0.2, 1,   1 },   -- Cyan
+        { 1,   0.6, 0.2 }, -- Orange
+        { 0.6, 0.2, 1 },   -- Purple
+    }
+    self.shapes = { "rectangle", "circle", "triangle" }
 
     self:loadNextGroup()
 end
@@ -280,6 +295,70 @@ function GameScene:loadNextSet()
     return true
 end
 
+function GameScene:shootConfetti(direction)
+    local screenWidth = love.graphics.getWidth()
+    local screenHeight = love.graphics.getHeight()
+
+    -- Determine cannon position
+    local margin = 0
+    local x = nil
+    local y = nil
+    local minAngle = nil
+    local maxAngle = nil
+    if direction == "upper-left" then
+        x = margin
+        y = margin
+        minAngle = 315
+        maxAngle = 360
+    elseif direction == "upper-right" then
+        x = screenWidth - margin
+        y = margin
+        minAngle = 315
+        maxAngle = 360
+    elseif direction == "lower-right" then
+        x = screenWidth - margin
+        y = screenHeight - margin
+        minAngle = 15
+        maxAngle = 60
+    elseif direction == "lower-left" then
+        x = margin
+        y = screenHeight - margin
+        minAngle = 15
+        maxAngle = 60
+    end
+
+
+    -- Create multiple confetti particles
+    local minConfettis = 25
+    local maxConfettis = 75
+    for i = 1, math.random(minConfettis, maxConfettis) do
+        local color = self.colors[math.random(#self.colors)]
+        local shape = self.shapes[math.random(#self.shapes)]
+
+        -- Calculate launch velocity
+        local angle = math.random(minAngle, maxAngle)
+        angle = math.rad(angle)
+
+        local minSpeed = 200
+        local maxSpeed = 500
+        local speed = math.random(minSpeed, maxSpeed)
+        local vx = math.cos(angle) * speed
+        local vy = -math.sin(angle) * speed
+
+        -- Adjust direction based on cannon side
+        if direction == "upper-right" or direction == "lower-right" then
+            vx = -vx
+        end
+
+        -- Add some randomness
+        vx = vx + (math.random() - 0.5) * 100
+        vy = vy + (math.random() - 0.5) * 100
+
+        local confettiPiece = Confetti:new(x, y, vx, vy, color, shape)
+        table.insert(self.confetti, confettiPiece)
+    end
+end
+
 function GameScene:addSelectedCard(card)
     love.audio.stop(SOUND_SOURCES.click)
     love.audio.play(SOUND_SOURCES.click)
@@ -335,6 +414,12 @@ function GameScene:onCardClicked(card)
             love.audio.stop(SOUND_SOURCES.correct)
             SOUND_SOURCES.correct:setPitch(newPitch)
             love.audio.play(SOUND_SOURCES.correct)
+
+            -- Create confetti explosion
+            self:shootConfetti("upper-left")  -- Left cannon
+            self:shootConfetti("upper-right") -- Right cannon
+            self:shootConfetti("lower-left")  -- Left cannon
+            self:shootConfetti("lower-right") -- Right cannon
 
             -- Update SRS state for successful match
             self:updateSRSState(a.pairId, true)
@@ -462,6 +547,21 @@ function GameScene:draw()
         local textWidth = self.streakFont:getWidth(streakText)
         love.graphics.print(streakText, love.graphics.getWidth() - textWidth - 20, 20)
         love.graphics.setColor(1, 1, 1, 1) -- Reset color
+    end
+
+    -- Draw all confetti
+    for _, piece in ipairs(self.confetti) do
+        piece:draw()
+    end
+end
+
+function GameScene:update(dt)
+    -- Update all confetti particles
+    for i = #self.confetti, 1, -1 do
+        local piece = self.confetti[i]
+        if not piece:update(dt) then
+            table.remove(self.confetti, i)
+        end
     end
 end
 
