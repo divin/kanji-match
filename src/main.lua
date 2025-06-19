@@ -28,7 +28,7 @@ function love.load()
     love.graphics.setBackgroundColor(r, g, b)
 
     -- Load a scence, register it, and switch to it
-    local scene = require("scenes.confettiExample")
+    local scene = require("scenes.game")
     SCENE_MANAGER:register("InitialScene", scene)
     SCENE_MANAGER:switchTo("InitialScene")
 end
