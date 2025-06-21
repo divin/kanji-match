@@ -10,8 +10,6 @@ function WaniKani:new(apiToken)
     instance.apiToken = apiToken or ""
     instance.baseUrl = "https://api.wanikani.com/v2"
     instance.revision = "20170710"
-    instance.userLevel = nil
-    instance.kanjiData = {}
     instance.isLoading = false
     instance.lastError = nil
     return instance
@@ -28,7 +26,7 @@ function WaniKani:_makeRequest(endpoint, callback)
     self.lastError = nil
 
     local url = self.baseUrl .. endpoint
-    local code, body, headers = https.request(url, {
+    local code, body, _ = https.request(url, {
         headers = {
             ["Authorization"] = "Bearer " .. self.apiToken,
             ["Wanikani-Revision"] = self.revision
@@ -54,39 +52,19 @@ function WaniKani:_makeRequest(endpoint, callback)
     end
 end
 
--- Public method to get user level
-function WaniKani:getUserLevel(callback)
-    self:_makeRequest("/user", function(success, data)
-        if success and data.data and data.data.level then
-            self.userLevel = data.data.level
-            if callback then callback(true, self.userLevel) end
-        else
-            if callback then callback(false, self.lastError or "Failed to get user level") end
-        end
-    end)
-end
+-- Private method to parse kanji data from API response and create groups
+function WaniKani:_parseAndSaveKanjiData(response, filename, callback)
+    local kanjiData = {}
 
--- Public method to fetch kanji data with visually similar variants
-function WaniKani:fetchKanjiData(callback)
-    self:_makeRequest("/subjects?types=kanji", function(success, data)
-        if success then
-            self:_parseKanjiData(data)
-            if callback then callback(true, self.kanjiData) end
-        else
-            if callback then callback(false, self.lastError or "Failed to fetch kanji data") end
-        end
-    end)
-end
+    if not response.data then
+        if callback then callback(false, "No data in response") end
+        return
+    end
 
--- Private method to parse kanji data from API response
-function WaniKani:_parseKanjiData(response)
-    self.kanjiData = {}
-
-    if not response.data then return end
-
+    -- Parse kanji data - include ALL kanji, not just those with visually similar ones
     for _, subject in ipairs(response.data) do
         local data = subject.data
-        if data and data.characters and data.visually_similar_subject_ids and #data.visually_similar_subject_ids > 0 then
+        if data and data.characters then
             -- Get all meanings joined with commas
             local allMeanings = "Unknown"
             if data.meanings and #data.meanings > 0 then
@@ -97,24 +75,28 @@ function WaniKani:_parseKanjiData(response)
                 allMeanings = table.concat(meaningStrings, ", ")
             end
 
-            table.insert(self.kanjiData, {
+            -- Include visually similar IDs if they exist, otherwise empty table
+            local visuallySimilarIds = {}
+            if data.visually_similar_subject_ids then
+                visuallySimilarIds = data.visually_similar_subject_ids
+            end
+
+            table.insert(kanjiData, {
                 id = subject.id,
                 character = data.characters,
                 meaning = allMeanings,
                 level = data.level,
-                visually_similar_ids = data.visually_similar_subject_ids
+                visually_similar_ids = visuallySimilarIds
             })
         end
     end
-end
 
--- Public method to get formatted kanji groups (like kanji_groups.json)
-function WaniKani:getKanjiGroups()
+    -- Create kanji groups
     local kanjiGroups = {}
     local processedIds = {}
 
-    for _, kanji in ipairs(self.kanjiData) do
-        if not processedIds[kanji.id] then
+    for _, kanji in ipairs(kanjiData) do
+        if not processedIds[kanji.id] and #kanji.visually_similar_ids > 0 then
             -- Create a new group with this kanji and its visually similar ones
             local group = {}
 
@@ -128,7 +110,7 @@ function WaniKani:getKanjiGroups()
 
             -- Find and add visually similar kanji from our data
             for _, similarId in ipairs(kanji.visually_similar_ids) do
-                for _, otherKanji in ipairs(self.kanjiData) do
+                for _, otherKanji in ipairs(kanjiData) do
                     if otherKanji.id == similarId and not processedIds[similarId] then
                         table.insert(group, {
                             character = otherKanji.character,
@@ -141,20 +123,25 @@ function WaniKani:getKanjiGroups()
                 end
             end
 
-            -- Only add groups with multiple kanji
-            if #group > 1 then
+            -- Add groups with at least one kanji (changed from multiple)
+            if #group >= 1 then
                 table.insert(kanjiGroups, group)
             end
         end
     end
 
-    return kanjiGroups
-end
+    -- If no groups were created from visually similar logic, create individual groups
+    if #kanjiGroups == 0 then
+        for _, kanji in ipairs(kanjiData) do
+            table.insert(kanjiGroups, { {
+                character = kanji.character,
+                meaning = kanji.meaning,
+                level = kanji.level
+            } })
+        end
+    end
 
--- Public method to save kanji groups to JSON file
-function WaniKani:saveKanjiGroups(filename, callback)
-    local kanjiGroups = self:getKanjiGroups()
-
+    -- Save to file
     if #kanjiGroups == 0 then
         if callback then callback(false, "No kanji groups to save") end
         return
@@ -174,34 +161,41 @@ function WaniKani:saveKanjiGroups(filename, callback)
     end
 end
 
--- Public method to check if currently loading
-function WaniKani:isCurrentlyLoading()
-    return self.isLoading
+-- Public method to get user information
+function WaniKani:getUserInfo(callback)
+    self:_makeRequest("/user", function(success, data)
+        if success and data.data then
+            if callback then callback(true, data.data) end
+        else
+            if callback then callback(false, self.lastError or "Failed to get user info") end
+        end
+    end)
 end
 
--- Public method to get last error
-function WaniKani:getLastError()
-    return self.lastError
-end
+-- Public method to fetch kanji data up to a given max level, arrange it, and save it
+function WaniKani:fetchKanjiData(maxLevel, filename, callback)
+    assert(type(maxLevel) == "number", "Max level must be a number")
 
--- Public method to get cached user level
-function WaniKani:getCachedUserLevel()
-    return self.userLevel
-end
+    local endpoint
+    if maxLevel == 60 then
+        -- If max level is 60, omit the level parameter to get all kanji
+        endpoint = "/subjects?types=kanji"
+    else
+        -- If max level is below 60, filter by levels 1 to maxLevel
+        local levels = {}
+        for i = 1, maxLevel do
+            table.insert(levels, tostring(i))
+        end
+        endpoint = "/subjects?types=kanji&levels=" .. table.concat(levels, ",")
+    end
 
--- Public method to get cached kanji data
-function WaniKani:getCachedKanjiData()
-    return self.kanjiData
-end
-
--- Public method to get kanji count
-function WaniKani:getKanjiCount()
-    return #self.kanjiData
-end
-
--- Public method to get groups count
-function WaniKani:getGroupsCount()
-    return #self:getKanjiGroups()
+    self:_makeRequest(endpoint, function(success, data)
+        if success then
+            self:_parseAndSaveKanjiData(data, filename, callback)
+        else
+            if callback then callback(false, self.lastError or "Failed to fetch kanji data") end
+        end
+    end)
 end
 
 return WaniKani

@@ -1,23 +1,38 @@
-local getKanjiData, _ = require("utils.kanjiData")
+local json = require("libs.json")
+local color = require("utils.colors")
+local createGradientMesh = require("utils.gradient")
+
+local Settings = require("objects.settings")
 SCENE_MANAGER = require("objects.sceneManager")
 
+-- Available fonts
 FONTS = {
     gothic = "assets/fonts/msgothic.ttc",
     keifont = "assets/fonts/keifont.ttf",
     sanafon = "assets/fonts/snsanafonmaru.ttf",
 }
 
-SETTINGS = {
-    userLevel = 22,
-    font = FONTS.keifont,
-    groupsPerLesson = 5
-}
+-- Default settings
+SETTINGS = Settings:new(FONTS.keifont)
 
+-- Sound sources
 SOUND_SOURCES = {
     click = love.audio.newSource("assets/sounds/first-click.wav", "static"),
     unclick = love.audio.newSource("assets/sounds/second-click.wav", "static"),
     correct = love.audio.newSource("assets/sounds/correct.wav", "static"),
     incorrect = love.audio.newSource("assets/sounds/incorrect.wav", "static"),
+}
+
+-- Gradient for background
+GRADIENT = nil
+
+-- Available scenes
+SCENES = {
+    welcomeScene = "scenes.welcomeScene",
+    -- mainMenuScene = "scenes.mainMenuScene",
+    -- gameScene = "scenes.gameScene",
+    -- gameCompleteScene = "scenes.gameCompleteScene",
+    -- settingsScene = "scenes.settingsScene",
 }
 
 function love.load()
@@ -27,10 +42,32 @@ function love.load()
     local r, g, b = love.math.colorFromBytes(98, 109, 115)
     love.graphics.setBackgroundColor(r, g, b)
 
-    -- Load a scence, register it, and switch to it
-    local scene = require("scenes.demos.textInputExample")
-    SCENE_MANAGER:register("InitialScene", scene)
-    SCENE_MANAGER:switchTo("InitialScene")
+    -- Background gradient
+    GRADIENT = createGradientMesh(
+        love.graphics.getWidth(),
+        love.graphics.getHeight(),
+        color.rgbTable(48, 67, 82),
+        color.rgbTable(139, 139, 139)
+    )
+
+    -- Load settings if available
+    SETTINGS:load()
+
+    -- Load and register scences
+    for _, scenePath in pairs(SCENES) do
+        local sceneModule = require(scenePath)
+        assert(sceneModule, "Failed to load scene module: " .. scenePath)
+        assert(type(sceneModule) == "table", "Scene module is not a table: " .. scenePath)
+        SCENE_MANAGER:register(scenePath, sceneModule)
+    end
+
+    -- Switch to the initial scene based on API token
+    if SETTINGS.apiToken == nil or SETTINGS.apiToken == "" then
+        SCENE_MANAGER:switchTo(SCENES.welcomeScene)
+    else
+        -- TODO: Validate API token here and switch to the main menu scene if valid
+        SCENE_MANAGER:switchTo(SCENES.mainMenuScene)
+    end
 end
 
 function love.update(dt)
@@ -40,6 +77,8 @@ function love.update(dt)
 end
 
 function love.draw()
+    love.graphics.setColor(1, 1, 1, 1) -- Reset color
+    love.graphics.draw(GRADIENT, 0, 0)
     if SCENE_MANAGER.currentScene and SCENE_MANAGER.currentScene.draw then
         SCENE_MANAGER.currentScene:draw()
     end
