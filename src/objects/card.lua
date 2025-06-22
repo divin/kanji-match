@@ -70,8 +70,6 @@ end
 function Card:onClick()
     if self.onClickCallback then
         self.onClickCallback(self)
-    else
-        print("Card clicked: " .. self.text)
     end
 end
 

@@ -10,9 +10,8 @@ local GameScene = BaseScene:new()
 GameScene.__index = GameScene -- For proper method lookup if methods are added after new()
 
 -- Called once when the scene is first loaded.
-function GameScene:load()
+function GameScene:enter(...)
     self.kanjiData = getKanjiDataForLevel(SETTINGS.userLevel)
-    print(#self.kanjiData .. " kanji groups loaded for level " .. SETTINGS.userLevel)
 
     self.maxCols = 5
     self.maxRows = 4
@@ -43,6 +42,21 @@ function GameScene:load()
     self.dueGroups = self:getDueGroups()
     self.failedKanji = {} -- Track failed attempts to only count once per set
 
+    -- Session tracking for overview
+    self.sessionStats = {
+        totalGroups = #self.dueGroups,
+        completedGroups = 0,
+        totalKanji = 0,
+        correctMatches = 0,
+        incorrectMatches = 0,
+        maxStreak = 0,
+        sessionStartTime = love.timer.getTime()
+    }
+
+    -- Save SRS states periodically
+    self.lastSaveTime = love.timer.getTime()
+    self.saveInterval = 30 -- Save every 30 seconds
+
     self.kanjiFont = love.graphics.newFont(SETTINGS.font, 40)
     self.meaningFont = love.graphics.newFont(SETTINGS.font, 14)
     self.streakFont = love.graphics.newFont(SETTINGS.font, 24)
@@ -62,6 +76,12 @@ function GameScene:load()
     self.shapes = { "rectangle", "circle", "triangle" }
 
     self:loadNextGroup()
+end
+
+-- Called when the scene is no longer the active scene
+function GameScene:leave()
+    -- Save SRS states before leaving the scene
+    self:saveSRSStates()
 end
 
 -- Load the next group of kanji cards
@@ -88,6 +108,10 @@ function GameScene:loadNextGroup()
     print("Loading group " .. dueGroupData.groupIndex .. " for review: " .. #kanjiGroup .. " kanji (earliest due: " ..
         (dueGroupData.hasNewKanji and "new kanji" or string.format("%.2f days ago", (os.time() / (24 * 60 * 60)) - dueGroupData.earliestDueDate)) ..
         ")")
+
+    -- Update session stats
+    self.sessionStats.completedGroups = self.currentIndex - 1
+    self.sessionStats.totalKanji = self.sessionStats.totalKanji + #kanjiGroup
 
     -- Define the dimensions
     local screenWidth = love.graphics.getWidth()
@@ -178,14 +202,61 @@ end
 
 -- Load SRS states from file or initialize new ones
 function GameScene:loadSRSStates()
+    local json = require("libs.json")
     local states = {}
-    -- Try to load from file (you can implement file I/O later)
-    -- For now, initialize empty states for all kanji
-    for _, group in ipairs(self.kanjiData) do
-        for _, kanji in ipairs(group) do
-            states[kanji.character] = nil -- Will be initialized on first review
+    local srsFileName = "srsData.json"
+
+    -- Try to load existing SRS data from file
+    local existingData = {}
+    if love.filesystem.getInfo(srsFileName) then
+        local srsFileContent = love.filesystem.read(srsFileName)
+        if srsFileContent then
+            local success, decoded = pcall(json.decode, srsFileContent)
+            if success and type(decoded) == "table" then
+                existingData = decoded
+                print("Loaded SRS data for " .. self:countKeys(existingData) .. " kanji")
+            else
+                print("Warning: Failed to decode SRS data file, starting fresh")
+            end
         end
     end
+
+    -- Merge existing data with current kanji data
+    for _, group in ipairs(self.kanjiData) do
+        for _, kanji in ipairs(group) do
+            local kanjiChar = kanji.character
+            if existingData[kanjiChar] then
+                -- Validate existing data structure
+                local existingState = existingData[kanjiChar]
+                if type(existingState) == "table" and
+                    type(existingState.n) == "number" and
+                    type(existingState.efactor) == "number" and
+                    type(existingState.interval) == "number" and
+                    type(existingState.lastReviewed) == "number" then
+                    states[kanjiChar] = existingState
+                else
+                    print("Warning: Invalid SRS data for " .. kanjiChar .. ", resetting")
+                    states[kanjiChar] = nil
+                end
+            else
+                -- New kanji, will be initialized on first review
+                states[kanjiChar] = nil
+            end
+        end
+    end
+
+    -- Clean up old data that's no longer available
+    local removedCount = 0
+    for kanjiChar, _ in pairs(existingData) do
+        if not states[kanjiChar] then
+            removedCount = removedCount + 1
+        end
+    end
+
+    if removedCount > 0 then
+        print("Removed SRS data for " .. removedCount .. " kanji no longer available")
+    end
+
     return states
 end
 
@@ -236,15 +307,92 @@ function GameScene:getDueGroups()
         end
     end)
 
-    print("Found " .. #dueGroups .. " groups due for review")
-    return dueGroups
+    -- Limit to groupsPerLesson setting
+    local limitedGroups = {}
+    local maxGroups = SETTINGS.groupsPerLesson or 5
+    -- Ensure at least 1 group is shown if any are available
+    if maxGroups < 1 and #dueGroups > 0 then
+        maxGroups = 1
+    end
+    for i = 1, math.min(#dueGroups, maxGroups) do
+        table.insert(limitedGroups, dueGroups[i])
+    end
+
+    print("Found " ..
+        #dueGroups .. " groups due for review, showing " .. #limitedGroups .. " (limited by groupsPerLesson)")
+    return limitedGroups
 end
 
 -- Save SRS states to file
 function GameScene:saveSRSStates()
-    -- Implement file saving here if needed
-    -- For now, just print the current states
-    print("SRS states updated for session")
+    local json = require("libs.json")
+    local srsFileName = "srsData.json"
+
+    -- Create a clean copy of SRS states for saving
+    local dataToSave = {}
+    local saveCount = 0
+
+    for kanjiChar, state in pairs(self.srsStates) do
+        if state ~= nil then
+            -- Only save kanji that have been reviewed at least once
+            dataToSave[kanjiChar] = {
+                n = state.n,
+                efactor = state.efactor,
+                interval = state.interval,
+                lastReviewed = state.lastReviewed,
+                -- Add metadata for future compatibility
+                version = "1.0",
+                lastUpdated = os.time()
+            }
+            saveCount = saveCount + 1
+        end
+    end
+
+    -- Save to file
+    local success, encoded = pcall(json.encode, dataToSave)
+    if success then
+        local writeSuccess = love.filesystem.write(srsFileName, encoded)
+        if writeSuccess then
+            print("Successfully saved SRS data for " .. saveCount .. " kanji")
+        else
+            print("Error: Failed to write SRS data to file")
+        end
+    else
+        print("Error: Failed to encode SRS data for saving")
+    end
+end
+
+-- Helper function to count keys in a table
+function GameScene:countKeys(tbl)
+    local count = 0
+    for _ in pairs(tbl) do
+        count = count + 1
+    end
+    return count
+end
+
+-- Auto-save SRS states periodically during gameplay
+function GameScene:autoSaveSRSStates()
+    local currentTime = love.timer.getTime()
+    if currentTime - self.lastSaveTime >= self.saveInterval then
+        self:saveSRSStates()
+        self.lastSaveTime = currentTime
+    end
+end
+
+-- Complete the session and switch to game overview
+function GameScene:completeSession()
+    -- Update final session stats
+    self.sessionStats.completedGroups = self.sessionStats.totalGroups
+    self.sessionStats.sessionTime = love.timer.getTime() - self.sessionStats.sessionStartTime
+
+    -- Final save of SRS states before completing session
+    self:saveSRSStates()
+
+    print("Session completed! Switching to game overview...")
+
+    -- Switch to game overview scene with stats
+    SCENE_MANAGER:switchTo(SCENES.gameOverviewScene, self.sessionStats)
 end
 
 -- Update SRS state for a kanji
@@ -274,6 +422,9 @@ function GameScene:updateSRSState(kanjiCharacter, passed)
 
     print("Updated SRS for " ..
         kanjiCharacter .. ": n=" .. newState.n .. ", interval=" .. string.format("%.2f", newState.interval) .. " days")
+
+    -- Trigger auto-save check
+    self:autoSaveSRSStates()
 end
 
 function GameScene:loadNextSet()
@@ -424,6 +575,12 @@ function GameScene:onCardClicked(card)
             -- Update SRS state for successful match
             self:updateSRSState(a.pairId, true)
 
+            -- Update session stats
+            self.sessionStats.correctMatches = self.sessionStats.correctMatches + 1
+            if self.streak > self.sessionStats.maxStreak then
+                self.sessionStats.maxStreak = self.streak
+            end
+
             -- Remove matched cards from current set
             for i = #self.currentSet, 1, -1 do
                 local c = self.currentSet[i]
@@ -445,15 +602,16 @@ function GameScene:onCardClicked(card)
                     -- No more sets in current group, try next group
                     self.currentIndex = self.currentIndex + 1
                     if self.currentIndex > #self.dueGroups then
-                        -- All due groups completed, refresh and start over
-                        self.dueGroups = self:getDueGroups()
-                        self.currentIndex = 1
+                        self:completeSession()
                     end
                     self:loadNextGroup()
                 end
             end
         else
             print("No match:", a.text, b.text)
+
+            -- Update session stats for incorrect match
+            self.sessionStats.incorrectMatches = self.sessionStats.incorrectMatches + 1
 
             -- Reset streak on incorrect match (if configured to do so)
             if self.streakConfig.resetOnMiss then
@@ -485,38 +643,6 @@ function GameScene:onCardClicked(card)
 end
 
 function GameScene:keyreleased(key, scancode)
-    if key == "right" then
-        -- Move to next set or group
-        self.currentSetIndex = self.currentSetIndex + 1
-        if not self:loadNextSet() then
-            -- No more sets in current group, try next group
-            self.currentIndex = self.currentIndex + 1
-            if self.currentIndex > #self.dueGroups then
-                -- All due groups completed, refresh and start over
-                self.dueGroups = self:getDueGroups()
-                self.currentIndex = 1
-            end
-            self:loadNextGroup()
-        end
-    elseif key == "left" then
-        -- Move to previous set or group
-        if self.currentSetIndex > 1 then
-            -- Go to previous set in current group
-            self.currentSetIndex = self.currentSetIndex - 1
-            self:loadNextSet()
-        elseif self.currentIndex > 1 then
-            -- Go to previous group and load its last set
-            self.currentIndex = self.currentIndex - 1
-            self:loadNextGroup()
-            -- Go to the last set of the previous group
-            self.currentSetIndex = #self.cardSets
-            self:loadNextSet()
-        else
-            -- Already at first group, refresh due groups and reload
-            self.dueGroups = self:getDueGroups()
-            self:loadNextGroup()
-        end
-    end
 end
 
 -- Called every frame to draw the scene.
@@ -563,6 +689,9 @@ function GameScene:update(dt)
             table.remove(self.confetti, i)
         end
     end
+
+    -- Auto-save SRS states periodically
+    self:autoSaveSRSStates()
 end
 
 function GameScene:mousemoved(x, y, dx, dy, istouch)

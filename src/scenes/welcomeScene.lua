@@ -24,11 +24,35 @@ function WelcomeScene:enter(...)
     -- Initialize text input for the API Token
     self.text = ""
     self.maxTextLength = 36 -- Maximum length for the API Token input
+
+    -- Error handling state
+    self.showError = false
+    self.errorMessage = ""
+    self.errorTimer = 0
+
+    -- Setup error dialog
+    local width, height = love.graphics.getDimensions()
+    local centerX = width / 2
+    local centerY = height / 2
+
+    self.errorDialog = {
+        width = 500,
+        height = 200,
+        x = centerX - 250,
+        y = centerY - 25,
+        okButton = {
+            x = centerX - 50,
+            y = centerY + 100,
+            width = 100,
+            height = 40,
+            hovered = false
+        }
+    }
 end
 
 -- Called when the scene is no longer the active scene.
 -- Use this for cleanup before switching to another scene.
-function BaseScene:leave()
+function WelcomeScene:leave()
     -- Turn off text input handling
     love.keyboard.setTextInput(false)
     love.keyboard.setKeyRepeat(false)
@@ -41,16 +65,38 @@ function WelcomeScene:update(dt)
         self.cursorTimer = 0
         self.cursor = self.cursor == "|" and "" or "|"
     end
+
+    -- Handle error dialog auto-close
+    if self.showError then
+        self.errorTimer = self.errorTimer + dt
+        -- Auto-hide error after 30 seconds
+        if self.errorTimer > 30 then
+            self.showError = false
+            self.errorTimer = 0
+        end
+    end
 end
 
 function WelcomeScene:textinput(t)
-    -- Limit API token input to 36 characters
-    if utf8.len(self.text) < self.maxTextLength then
-        self.text = self.text .. t
+    -- Only handle text input if error dialog is not shown
+    if not self.showError then
+        -- Limit API token input to 36 characters
+        if utf8.len(self.text) < self.maxTextLength then
+            self.text = self.text .. t
+        end
     end
 end
 
 function WelcomeScene:keypressed(key)
+    -- Handle error dialog first
+    if self.showError then
+        if key == "return" or key == "enter" or key == "escape" then
+            self.showError = false
+            self.errorTimer = 0
+        end
+        return
+    end
+
     local control = false
     local osString = love.system.getOS()
 
@@ -92,9 +138,22 @@ function WelcomeScene:keypressed(key)
             end
         end
     elseif key == "return" or key == "enter" then
+        -- Validate input first
+        if self.text == "" or utf8.len(self.text) < 10 then
+            self:showErrorMessage("Please enter a valid API token (at least 10 characters)")
+            return
+        end
+
         local wanikani = WaniKani:new(self.text)
         wanikani:getUserInfo(function(success, userInfo)
             if success then
+                -- Check if subscription is active
+                if not userInfo.subscription.active then
+                    self:showErrorMessage(
+                        "Your WaniKani subscription is not active.\nPlease activate your subscription to use this app.")
+                    return
+                end
+
                 SETTINGS.isValidToken = true
                 SETTINGS.apiToken = self.text
                 SETTINGS.userLevel = userInfo.level
@@ -104,18 +163,26 @@ function WelcomeScene:keypressed(key)
 
                 wanikani:fetchKanjiData(SETTINGS.maxGrantedLevel, "kanjiData.json", function(success, result)
                     if not success then
-                        -- TODO: Handle error gracefully, e.g., show a message to the user
-                        print("Failed to fetch kanji data: " .. (result or "Unknown error"))
+                        self:showErrorMessage("Failed to fetch kanji data from WaniKani.\nError: " ..
+                            (result or "Unknown error") .. "\n\nPlease check your internet connection and try again.")
+                    else
+                        -- Switch to the main menu scene after successful data fetch
+                        SCENE_MANAGER:switchTo(SCENES.mainMenuScene)
                     end
                 end)
             else
-                -- TODO: Handle error gracefully, e.g., show a message to the user
+                -- Handle API token validation error
                 SETTINGS.isValidToken = false
-                print("Failed to get user info: " .. (userInfo or "Unknown error"))
+                local errorMsg = "Failed to validate API token.\n"
+                if userInfo and type(userInfo) == "string" then
+                    errorMsg = errorMsg .. "Error: " .. userInfo
+                else
+                    errorMsg = errorMsg .. "Please check that your token is correct."
+                end
+                errorMsg = errorMsg .. "\n\nMake sure you have a valid WaniKani API token."
+                self:showErrorMessage(errorMsg)
             end
         end)
-        -- TODO: Switch to the main game scene after successful validation
-        -- TODO: Show error message if some error occurs
     end
 end
 
@@ -158,6 +225,79 @@ function WelcomeScene:draw()
     love.graphics.printf("Kanji Data Loaded: " .. (love.filesystem.getInfo("kanjiData.json") and "Yes" or "No"), 0,
         height * 0.65, width,
         "center")
+
+    -- Draw error dialog if shown
+    if self.showError then
+        self:drawErrorDialog()
+    end
+end
+
+function WelcomeScene:mousemoved(x, y, dx, dy, istouch)
+    if self.showError then
+        -- Update OK button hover state
+        local okBtn = self.errorDialog.okButton
+        okBtn.hovered = x >= okBtn.x and x <= okBtn.x + okBtn.width and
+            y >= okBtn.y and y <= okBtn.y + okBtn.height
+    end
+end
+
+function WelcomeScene:mousepressed(x, y, button, istouch, presses)
+    if button == 1 and self.showError then -- Left mouse button
+        if self.errorDialog.okButton.hovered then
+            self.showError = false
+            self.errorTimer = 0
+        end
+    end
+end
+
+function WelcomeScene:showErrorMessage(message)
+    self.errorMessage = message
+    self.showError = true
+    self.errorTimer = 0
+end
+
+function WelcomeScene:drawErrorDialog()
+    local dialog = self.errorDialog
+
+    -- Semi-transparent overlay
+    love.graphics.setColor(0, 0, 0, 0.7)
+    love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
+
+    -- Error dialog background
+    love.graphics.setColor(0.4, 0.3, 0.3, 1)
+    roundRect("fill", dialog.x, dialog.y, dialog.width, dialog.height, 12, 12)
+    love.graphics.setColor(0.8, 0.6, 0.6, 1)
+    roundRect("line", dialog.x, dialog.y, dialog.width, dialog.height, 12, 12)
+
+    -- Error title
+    love.graphics.setColor(1, 0.8, 0.8, 1)
+    local titleFont = love.graphics.newFont(SETTINGS.font, 24)
+    love.graphics.setFont(titleFont)
+    love.graphics.printf("Error", dialog.x, dialog.y + 20, dialog.width, "center")
+
+    -- Error message
+    love.graphics.setColor(1, 1, 1, 1)
+    local messageFont = love.graphics.newFont(SETTINGS.font, 16)
+    love.graphics.setFont(messageFont)
+    love.graphics.printf(self.errorMessage, dialog.x + 20, dialog.y + 60, dialog.width - 40, "center")
+
+    -- OK button
+    local okBtn = dialog.okButton
+    love.graphics.setColor(okBtn.hovered and 0.7 or 0.5, okBtn.hovered and 0.7 or 0.5, okBtn.hovered and 0.9 or 0.7, 1)
+    roundRect("fill", okBtn.x, okBtn.y, okBtn.width, okBtn.height, 8, 8)
+    love.graphics.setColor(0.3, 0.3, 0.5, 1)
+    roundRect("line", okBtn.x, okBtn.y, okBtn.width, okBtn.height, 8, 8)
+    love.graphics.setColor(1, 1, 1, 1)
+    local buttonFont = love.graphics.newFont(SETTINGS.font, 18)
+    love.graphics.setFont(buttonFont)
+    love.graphics.printf("OK", okBtn.x, okBtn.y + okBtn.height / 2 - buttonFont:getHeight() / 2, okBtn.width, "center")
+
+    -- Instructions
+    love.graphics.setColor(0.8, 0.8, 0.8, 1)
+    local instructFont = love.graphics.newFont(SETTINGS.font, 14)
+    love.graphics.setFont(instructFont)
+    love.graphics.printf("Press Enter, Escape, or click OK to close", dialog.x, dialog.y + dialog.height - 30,
+        dialog.width, "center")
 end
 
 -- Return the scene object so it can be registered by the SceneManager

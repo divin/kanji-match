@@ -3,6 +3,7 @@ local color = require("utils.colors")
 local createGradientMesh = require("utils.gradient")
 
 local Settings = require("objects.settings")
+local WaniKani = require("objects.wanikani")
 SCENE_MANAGER = require("objects.sceneManager")
 
 -- Available fonts
@@ -26,13 +27,17 @@ SOUND_SOURCES = {
 -- Gradient for background
 GRADIENT = nil
 
+-- Loading state for API validation
+LOADING_API_VALIDATION = false
+
 -- Available scenes
 SCENES = {
     welcomeScene = "scenes.welcomeScene",
-    -- mainMenuScene = "scenes.mainMenuScene",
-    -- gameScene = "scenes.gameScene",
+    mainMenuScene = "scenes.mainMenuScene",
+    gameScene = "scenes.gameScene",
+    gameOverviewScene = "scenes.gameOverviewScene",
+    settingsScene = "scenes.settingsScene",
     -- gameCompleteScene = "scenes.gameCompleteScene",
-    -- settingsScene = "scenes.settingsScene",
 }
 
 function love.load()
@@ -65,8 +70,31 @@ function love.load()
     if SETTINGS.apiToken == nil or SETTINGS.apiToken == "" then
         SCENE_MANAGER:switchTo(SCENES.welcomeScene)
     else
-        -- TODO: Validate API token here and switch to the main menu scene if valid
-        SCENE_MANAGER:switchTo(SCENES.mainMenuScene)
+        -- Show loading state and validate API token with WaniKani API
+        LOADING_API_VALIDATION = true
+        local wanikani = WaniKani:new(SETTINGS.apiToken)
+        wanikani:getUserInfo(function(success, userInfo)
+            LOADING_API_VALIDATION = false
+            if success and userInfo.subscription.active then
+                -- Token is valid and subscription is active
+                SETTINGS.isValidToken = true
+                SETTINGS.userLevel = userInfo.level
+                SETTINGS.activeSubscription = userInfo.subscription.active
+                SETTINGS.maxGrantedLevel = userInfo.subscription.max_level_granted
+                SETTINGS:save()
+
+                -- Switch to main menu scene
+                SCENE_MANAGER:switchTo(SCENES.mainMenuScene)
+            else
+                -- Token is invalid or subscription is not active
+                SETTINGS.isValidToken = false
+                SETTINGS.activeSubscription = false
+                SETTINGS:save()
+
+                -- Switch to welcome scene to re-enter token
+                SCENE_MANAGER:switchTo(SCENES.welcomeScene)
+            end
+        end)
     end
 end
 
@@ -79,7 +107,15 @@ end
 function love.draw()
     love.graphics.setColor(1, 1, 1, 1) -- Reset color
     love.graphics.draw(GRADIENT, 0, 0)
-    if SCENE_MANAGER.currentScene and SCENE_MANAGER.currentScene.draw then
+
+    if LOADING_API_VALIDATION then
+        -- Show loading screen during API validation
+        local width, height = love.graphics.getDimensions()
+        local loadingFont = love.graphics.newFont(SETTINGS.font, 24)
+        love.graphics.setFont(loadingFont)
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.printf("Validating API Token...", 0, height / 2 - 12, width, "center")
+    elseif SCENE_MANAGER.currentScene and SCENE_MANAGER.currentScene.draw then
         SCENE_MANAGER.currentScene:draw()
     end
 end
