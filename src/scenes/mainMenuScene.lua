@@ -40,11 +40,6 @@ function MainMenuScene:enter(...)
     }
 end
 
--- Called when the scene is no longer the active scene.
--- Use this for cleanup before switching to another scene.
-function MainMenuScene:leave()
-end
-
 function MainMenuScene:mousemoved(x, y, dx, dy, istouch)
     -- Update button hover states
     for _, button in pairs(self.buttons) do
