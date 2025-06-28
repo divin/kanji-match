@@ -88,6 +88,7 @@ function Reviewer:saveSRSState()
                 efactor = state.efactor,
                 interval = state.interval,
                 lastReviewed = state.lastReviewed,
+                nextReview = state.nextReview, -- Add next review timestamp
                 -- Add metadata for future compatibility
                 version = "1.0",
                 lastUpdated = os.time()
@@ -134,6 +135,8 @@ function Reviewer:updateSRSState(kanjiCharacter, passed)
     assert(type(newState.interval) == "number", "SRS state interval must be a number")
 
     newState.lastReviewed = currentTime
+    -- Calculate next review timestamp (in seconds since epoch)
+    newState.nextReview = math.floor(os.time() + (newState.interval * 24 * 60 * 60))
 
     -- Store updated state
     self.states[kanjiCharacter] = newState
