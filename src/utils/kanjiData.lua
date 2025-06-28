@@ -1,15 +1,15 @@
 local json = require("libs.json")
 
---- Reads and parses kanji data from the 'kanji_groups.json' file.
+--- Reads and parses kanji data from the 'kanjiData.json' file.
 --- @return table kanjiData # The parsed kanji data as a Lua table.
 --- @error If the file cannot be read or if the JSON data is invalid or not a table.
 local function getKanjiData()
     -- Read the JSON file
-    local file = love.filesystem.read("data/kanji_groups.json")
-    assert(file, "Could not read kanji_groups.json")
+    local file = love.filesystem.read("kanjiData.json")
+    assert(file, "Could not read kanjiData.json")
 
     local data = json.decode(file)
-    assert(data, "Failed to decode JSON data from kanji_groups.json")
+    assert(data, "Failed to decode JSON data from kanjiData.json")
     assert(type(data) == "table", "Expected data to be a table")
 
     return data

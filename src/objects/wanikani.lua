@@ -153,7 +153,7 @@ function WaniKani:_parseAndSaveKanjiData(response, filename, callback)
         return
     end
 
-    local fileSuccess = love.filesystem.write(filename or "wanikani_kanji_groups.json", jsonOutput)
+    local fileSuccess = love.filesystem.write(filename or "kanjiData.json", jsonOutput)
     if fileSuccess then
         if callback then callback(true, "Saved " .. #kanjiGroups .. " kanji groups") end
     else
