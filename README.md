@@ -48,6 +48,9 @@ Kanji Match is an educational game designed to help you master visually similar 
 
 Pre-built binaries for **Linux**, **macOS**, and **Windows** will be provided. Simply download the appropriate binary for your platform and run it—no additional installation required.
 
+> **macOS Users:**  
+> This app is **not code-signed**. After the initial start, you may need to allow the app to run via **System Settings → Privacy & Security**. If you see a warning that the app cannot be opened because it is from an unidentified developer, open System Settings, scroll to the bottom of the Privacy & Security pane, and click "Allow Anyway" next to the Kanji Match app. Then try launching the app again. This is required because the app is unsigned.
+
 If you prefer to run from source:
 
 1. Install [LÖVE](https://love2d.org/).
