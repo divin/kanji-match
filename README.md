@@ -44,9 +44,19 @@ Kanji Match is an educational game designed to help you master visually similar 
 - Best Streak
 - Session Time
 
-## 🚀 Running the Game
+## 🚀 Download & Running the Game
 
-Pre-built binaries for **Linux**, **macOS**, and **Windows** will be provided. Simply download the appropriate binary for your platform and run it—no additional installation required.
+You can download pre-built binaries for **Linux**, **macOS**, and **Windows** from the following pages:
+
+- **[GitHub Releases](https://github.com/divingavran/kanji-match/releases):** Always get the latest version here.
+  - **Windows:** Download the `.exe` installer or the `.zip` portable version.
+  - **macOS:** Download the `.app.zip` for a drag-and-drop app, or `.dmg` for disk image install.
+  - **Linux:** Download the `.AppImage` for a single-file app, or `.tar.gz` for manual extraction.
+  - **All Platforms (advanced/source):** Download the `.love` file to run with LÖVE2D, or the source code archives.
+
+- **[itch.io Page](https://divingavran.itch.io/kanji-match):** Alternative download and community page.
+
+Simply download the appropriate file for your platform and run it—no additional installation required.
 
 > **macOS Users:**  
 > This app is **not code-signed**. After the initial start, you may need to allow the app to run via **System Settings → Privacy & Security**. If you see a warning that the app cannot be opened because it is from an unidentified developer, open System Settings, scroll to the bottom of the Privacy & Security pane, and click "Allow Anyway" next to the Kanji Match app. Then try launching the app again. This is required because the app is unsigned.
