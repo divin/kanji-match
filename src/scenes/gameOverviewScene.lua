@@ -17,6 +17,12 @@ end
 
 -- Called when the scene becomes the active scene.
 function GameOverviewScene:enter(stats)
+    -- Play success sound when entering overview scene
+    if SOUND_SOURCES and SOUND_SOURCES.success then
+        love.audio.stop(SOUND_SOURCES.success)
+        love.audio.play(SOUND_SOURCES.success)
+    end
+
     -- Accept stats from the game scene
     if stats then
         self.totalGroups = stats.totalGroups or 0
