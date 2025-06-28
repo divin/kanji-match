@@ -17,6 +17,10 @@ function SessionTracker:new(totalGroups, streakConfig)
     instance.sessionStartTime = love.timer.getTime()
     instance.sessionTime = 0
 
+    -- Track unique correct/incorrect matches per kanji (pairId)
+    instance.correctKanji = {}
+    instance.incorrectKanji = {}
+
     -- Streak tracking
     instance.streak = 0
     instance.streakConfig = streakConfig or {
@@ -30,9 +34,12 @@ function SessionTracker:new(totalGroups, streakConfig)
     return instance
 end
 
--- Record a correct match
-function SessionTracker:recordCorrectMatch()
-    self.correctMatches = self.correctMatches + 1
+-- Record a correct match for a specific kanji (pairId)
+function SessionTracker:recordCorrectMatch(pairId)
+    if pairId and not self.correctKanji[pairId] and not self.incorrectKanji[pairId] then
+        self.correctKanji[pairId] = true
+        self.correctMatches = self.correctMatches + 1
+    end
     self.streak = self.streak + 1
 
     if self.streak > self.maxStreak then
@@ -40,9 +47,13 @@ function SessionTracker:recordCorrectMatch()
     end
 end
 
--- Record an incorrect match
-function SessionTracker:recordIncorrectMatch()
-    self.incorrectMatches = self.incorrectMatches + 1
+-- Record an incorrect match for a specific kanji (pairId)
+function SessionTracker:recordIncorrectMatch(pairId)
+    -- Only count as incorrect if not already correct and not already counted as incorrect
+    if pairId and not self.correctKanji[pairId] and not self.incorrectKanji[pairId] then
+        self.incorrectKanji[pairId] = true
+        self.incorrectMatches = self.incorrectMatches + 1
+    end
 
     if self.streakConfig.resetOnMiss then
         self.streak = 0
@@ -110,7 +121,7 @@ end
 -- Finalize session (calculate final time)
 function SessionTracker:finalizeSession()
     self.sessionTime = love.timer.getTime() - self.sessionStartTime
-    self.completedGroups = self.totalGroups
+    -- Do not set completedGroups to totalGroups; keep the actual completed count
 end
 
 -- Get all session statistics
