@@ -1,3 +1,11 @@
+-- Load runtime loader for HTTPS support
+local major, minor, _, _ = love.getVersion()
+if major < 12 then
+    https = nil
+    local runtimeLoader = require("runtime.loader")
+    https = runtimeLoader.loadHTTPS()
+end
+
 local json = require("libs.json")
 local color = require("utils.colors")
 local createGradientMesh = require("utils.gradient")
@@ -22,6 +30,7 @@ SOUND_SOURCES = {
     unclick = love.audio.newSource("assets/sounds/second-click.wav", "static"),
     correct = love.audio.newSource("assets/sounds/correct.wav", "static"),
     incorrect = love.audio.newSource("assets/sounds/incorrect.wav", "static"),
+    success = love.audio.newSource("assets/sounds/tada-fanfare.wav", "static"),
 }
 
 -- Gradient for background
@@ -37,13 +46,13 @@ SCENES = {
     gameScene = "scenes.gameScene",
     gameOverviewScene = "scenes.gameOverviewScene",
     settingsScene = "scenes.settingsScene",
-    -- gameCompleteScene = "scenes.gameCompleteScene",
 }
 
 function love.load()
     -- Initialize LÖVE settings
-    love.window.setTitle("Kanji Match")
-    love.window.setMode(960, 720, { resizable = false, vsync = true })
+    local icon = love.image.newImageData("assets/images/icon.png")
+    love.window.setIcon(icon)
+
     local r, g, b = love.math.colorFromBytes(98, 109, 115)
     love.graphics.setBackgroundColor(r, g, b)
 
