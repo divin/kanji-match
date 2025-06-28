@@ -15,27 +15,27 @@ inputs:
   android_cmdline_tools_version:
     description: Android cmdline-tools version
     required: false
-    default: '11076708'
+    default: "11076708"
   android_java_version:
     description: Android Java JDK version
     required: false
-    default: '17'
+    default: "17"
   android_love_version:
     description: LÖVE version for Android to use
     required: false
-    default: '11.5a'
+    default: "11.5a"
   android_orientation:
     description: Android screen orientation
     required: false
-    default: 'landscape'
+    default: "landscape"
   android_record:
     description: Android microphone access - NoRecord or Record
     required: false
-    default: 'NoRecord'
+    default: "NoRecord"
   android_version_code:
     description: Android version code
     required: false
-    default: '1'
+    default: "1"
   product_file:
     description: The basename of the file to be generated
     required: true
@@ -71,7 +71,7 @@ runs:
         fetch-depth: 1
     - name: Copy love assets
       shell: bash
-      run: rsync -av --exclude='.gitkeep' ./game/* ./tools/love-android/app/src/embed/assets/
+      run: rsync -av --exclude='.gitkeep' ./${{ env.GAME_FOLDER }}/* ./tools/love-android/app/src/embed/assets/
     - name: Modify gradle.properties
       shell: bash
       run: |

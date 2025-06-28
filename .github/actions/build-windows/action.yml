@@ -42,11 +42,11 @@ inputs:
   target_windows_install:
     description: Create Windows installer
     required: false
-    default: 'true'
+    default: "true"
   target_windows_sfx:
     description: Create Windows SFX .exe
     required: false
-    default: 'false'
+    default: "false"
   target_windows_zip:
     description: Create Windows ZIP files
     required: true
@@ -61,6 +61,7 @@ runs:
         output_folder: ${{ inputs.output_folder }}
         product_file: ${{ inputs.product_file }}
         product_name: ${{ inputs.product_name }}
+        game_folder: ${{ env.GAME_FOLDER }}
     - name: Install WineHQ
       shell: bash
       run: |
@@ -96,8 +97,8 @@ runs:
     - name: Resource patch love.exe
       env:
         BUILD_NUM: ${{ inputs.build_num }}
-        DISPLAY: ":99"     # Virtual display for headless operation
-        WINEDEBUG: "-all"  # Disable WINE debug output
+        DISPLAY: ":99" # Virtual display for headless operation
+        WINEDEBUG: "-all" # Disable WINE debug output
       shell: bash
       run: |
         # Remove the default icon and version info then add the new icon and version info
@@ -260,8 +261,8 @@ runs:
       if: ${{ inputs.target_windows_sfx == 'true' }}
       env:
         BUILD_NUM: ${{ inputs.build_num }}
-        DISPLAY: ":99"     # Virtual display for headless operation
-        WINEDEBUG: "-all"  # Disable WINE debug output
+        DISPLAY: ":99" # Virtual display for headless operation
+        WINEDEBUG: "-all" # Disable WINE debug output
       shell: bash
       run: |
         SFX_EXE="${{ inputs.output_folder }}/${{ inputs.product_file }}.exe"

@@ -29,6 +29,7 @@ runs:
         output_folder: ${{ inputs.output_folder }}
         product_file: ${{ inputs.product_file }}
         product_name: ${{ inputs.product_name }}
+        game_folder: ${{ env.GAME_FOLDER }}
     - shell: bash
       run: |
         convert ./resources/icon.png -resize 256x256 "${{ inputs.output_folder }}/icon.png"
