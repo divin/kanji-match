@@ -7,6 +7,10 @@ local SessionTracker = require("objects.sessionTracker")
 local CardLayoutManager = require("objects.cardLayoutManager")
 local MatchingGameLogic = require("objects.matchingGameLogic")
 
+-- Cancel/exit button config
+local EXIT_BTN_SIZE = 36
+local EXIT_BTN_PADDING = 12
+
 -- Create a new scene object, inheriting from BaseScene
 local GameScene = BaseScene:new()
 GameScene.__index = GameScene -- For proper method lookup if methods are added after new()
@@ -23,6 +27,13 @@ function GameScene:enter(...)
 
     self.reviewer = Reviewer:new()
     assert(self.reviewer, "Failed to create Reviewer object")
+
+    -- Exit button hover state
+    self.exitBtnHovered = false
+
+    -- For displaying next review info
+    self.nextReviewMessage = nil
+    self.nextReviewMessageTimer = 0
 
     self.kanjiData = getKanjiDataForLevel(SETTINGS.userLevel)
     assert(self.kanjiData, "Failed to load kanji data for level " .. tostring(SETTINGS.userLevel))
@@ -97,7 +108,7 @@ function GameScene:_setupMatchingCallbacks()
             print("Matched!", cardA.text, cardB.text)
 
             -- Record correct match and get new pitch
-            self.sessionTracker:recordCorrectMatch()
+            self.sessionTracker:recordCorrectMatch(cardA.pairId)
             local newPitch = self.sessionTracker:getAudioPitch()
 
             print("Streak: " .. self.sessionTracker:getStreak() .. ", Pitch: " .. string.format("%.2f", newPitch))
@@ -120,7 +131,7 @@ function GameScene:_setupMatchingCallbacks()
             print("No match:", cardA.text, cardB.text)
 
             -- Record incorrect match and handle streak reset
-            self.sessionTracker:recordIncorrectMatch()
+            self.sessionTracker:recordIncorrectMatch(cardA.pairId)
             print("Streak reset to " .. self.sessionTracker:getStreak())
 
             -- Reset pitch to base value
@@ -144,10 +155,15 @@ function GameScene:_setupMatchingCallbacks()
             -- Save SRS states after completing a set
             self.reviewer:saveSRSState()
 
+            -- Show next review time for this group
+            self:showNextReviewTimeForCurrentGroup()
+
             -- Try to load next set first
             self.currentSetIndex = self.currentSetIndex + 1
             if not self:loadNextSet() then
-                -- No more sets in current group, try next group
+                -- No more sets in current group, mark group as completed
+                self.sessionTracker:completeGroup()
+                -- Try next group
                 self.currentIndex = self.currentIndex + 1
                 if self.currentIndex > #self.dueGroups then
                     self:completeSession()
@@ -194,8 +210,7 @@ function GameScene:loadNextGroup()
         (dueGroupData.hasNewKanji and "new kanji" or string.format("%.2f days ago", (os.time() / (24 * 60 * 60)) - dueGroupData.earliestDueDate)) ..
         ")")
 
-    -- Update session stats
-    self.sessionTracker.completedGroups = self.currentIndex - 1
+    -- Update session stats (do not increment completedGroups here)
     self.sessionTracker:addKanji(#kanjiGroup)
 
     -- Create card sets using layout manager
@@ -253,11 +268,11 @@ function GameScene:getDueGroups()
         end
     end
 
-    -- Sort groups by earliest due date (most overdue first)
+    -- Sort groups: due groups (not hasNewKanji) first, then new groups, both by earliest due date
     table.sort(dueGroups, function(a, b)
-        if a.hasNewKanji and not b.hasNewKanji then
+        if not a.hasNewKanji and b.hasNewKanji then
             return true
-        elseif not a.hasNewKanji and b.hasNewKanji then
+        elseif a.hasNewKanji and not b.hasNewKanji then
             return false
         else
             return a.earliestDueDate < b.earliestDueDate
@@ -383,13 +398,128 @@ function GameScene:draw()
         love.graphics.setColor(1, 1, 1, 1) -- Reset color
     end
 
+    -- Draw exit/cancel button (top left)
+    local btnX = EXIT_BTN_PADDING
+    local btnY = EXIT_BTN_PADDING
+    love.graphics.setColor(0.9, 0.2, 0.2, self.exitBtnHovered and 1 or 0.8)
+    love.graphics.rectangle("fill", btnX, btnY, EXIT_BTN_SIZE, EXIT_BTN_SIZE, 8, 8)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.setLineWidth(2)
+    love.graphics.line(
+        btnX + 10, btnY + 10, btnX + EXIT_BTN_SIZE - 10, btnY + EXIT_BTN_SIZE - 10
+    )
+    love.graphics.line(
+        btnX + EXIT_BTN_SIZE - 10, btnY + 10, btnX + 10, btnY + EXIT_BTN_SIZE - 10
+    )
+    love.graphics.setLineWidth(1)
+
+    -- Draw next review message if present
+    if self.nextReviewMessage then
+        love.graphics.setFont(self.streakFont)
+        love.graphics.setColor(0.2, 0.8, 0.2, 1)
+        local textWidth = self.streakFont:getWidth(self.nextReviewMessage)
+        -- Align vertically with streak text (y = 20)
+        love.graphics.print(self.nextReviewMessage, (love.graphics.getWidth() - textWidth) / 2, 20)
+        love.graphics.setColor(1, 1, 1, 1)
+    end
+
+    -- Draw group count in lower right corner
+    if self.dueGroups and #self.dueGroups > 0 then
+        local groupText = string.format("%d/%d", math.min(self.currentIndex, #self.dueGroups), #self.dueGroups)
+        love.graphics.setFont(self.streakFont)
+        love.graphics.setColor(0.8, 0.8, 0.8, 1)
+        local textWidth = self.streakFont:getWidth(groupText)
+        local textHeight = self.streakFont:getHeight()
+        love.graphics.print(groupText, love.graphics.getWidth() - textWidth - 20,
+            love.graphics.getHeight() - textHeight - 20)
+        love.graphics.setColor(1, 1, 1, 1)
+    end
+
+    -- Draw group SRS level in lower left corner
+    if self.dueGroups and #self.dueGroups > 0 and self.srsStates then
+        local groupIdx = math.min(self.currentIndex, #self.dueGroups)
+        local dueGroup = self.dueGroups[groupIdx]
+        if dueGroup and dueGroup.group then
+            -- Find the minimum SRS level (n) among all kanji in the group (show lowest level)
+            local minLevel = nil
+            for _, kanji in ipairs(dueGroup.group) do
+                local state = self.srsStates[kanji.character]
+                if state and state.n ~= nil then
+                    if not minLevel or state.n < minLevel then
+                        minLevel = state.n
+                    end
+                else
+                    minLevel = 0
+                    break
+                end
+            end
+            minLevel = minLevel or 0
+            local levelText = string.format("Level: %d", minLevel)
+            love.graphics.setFont(self.streakFont)
+            love.graphics.setColor(0.8, 0.8, 0.8, 1)
+            love.graphics.print(levelText, 20, love.graphics.getHeight() - self.streakFont:getHeight() - 20)
+            love.graphics.setColor(1, 1, 1, 1)
+        end
+    end
+
     -- Draw all confetti
     self.confettiCannon:draw()
+end
+
+-- Show next review time for the just-finished group for a few seconds
+function GameScene:showNextReviewTimeForCurrentGroup()
+    -- Find the group that was just finished
+    local groupIdx = self.currentIndex
+    if groupIdx > #self.dueGroups then
+        groupIdx = #self.dueGroups
+    end
+    local dueGroup = self.dueGroups[groupIdx]
+    if not dueGroup or not dueGroup.group then
+        return
+    end
+
+    -- Find the latest nextReview timestamp among all kanji in the group
+    local maxNextReview = 0
+    for _, kanji in ipairs(dueGroup.group) do
+        local state = self.srsStates[kanji.character]
+        if state and state.nextReview and state.nextReview > maxNextReview then
+            maxNextReview = state.nextReview
+        end
+    end
+
+    if maxNextReview > 0 then
+        local now = os.time()
+        local seconds = maxNextReview - now
+        local minutes = math.floor(seconds / 60)
+        local hours = math.floor(minutes / 60)
+        local days = math.floor(hours / 24)
+        local msg = ""
+        if seconds < 60 then
+            msg = "Next review for this group: less than a minute!"
+        elseif minutes < 60 then
+            msg = string.format("Next review for this group: in %d minute%s", minutes, minutes == 1 and "" or "s")
+        elseif hours < 24 then
+            msg = string.format("Next review for this group: in %d hour%s", hours, hours == 1 and "" or "s")
+        else
+            msg = string.format("Next review for this group: in %d day%s", days, days == 1 and "" or "s")
+        end
+        self.nextReviewMessage = msg
+        self.nextReviewMessageTimer = 3.0 -- Show for 3 seconds
+    end
 end
 
 function GameScene:update(dt)
     -- Update all confetti particles
     self.confettiCannon:update(dt)
+
+    -- Update next review message timer
+    if self.nextReviewMessage then
+        self.nextReviewMessageTimer = self.nextReviewMessageTimer - dt
+        if self.nextReviewMessageTimer <= 0 then
+            self.nextReviewMessage = nil
+            self.nextReviewMessageTimer = 0
+        end
+    end
 
     -- Auto-save SRS states periodically
     self:autoSaveSRSStates()
@@ -398,6 +528,15 @@ end
 function GameScene:mousemoved(x, y, dx, dy, istouch)
     assert(type(x) == "number", "Mouse x coordinate must be a number")
     assert(type(y) == "number", "Mouse y coordinate must be a number")
+
+    -- Check if mouse is over exit button
+    local btnX = EXIT_BTN_PADDING
+    local btnY = EXIT_BTN_PADDING
+    if x >= btnX and x <= btnX + EXIT_BTN_SIZE and y >= btnY and y <= btnY + EXIT_BTN_SIZE then
+        self.exitBtnHovered = true
+    else
+        self.exitBtnHovered = false
+    end
 
     -- Check if the mouse is hovering over any card
     if self.currentSet then
@@ -415,6 +554,16 @@ function GameScene:mousepressed(x, y, button, istouch, presses)
     assert(type(x) == "number", "Mouse x coordinate must be a number")
     assert(type(y) == "number", "Mouse y coordinate must be a number")
     assert(type(button) == "number", "Mouse button must be a number")
+
+    -- Check if exit button was clicked
+    local btnX = EXIT_BTN_PADDING
+    local btnY = EXIT_BTN_PADDING
+    if x >= btnX and x <= btnX + EXIT_BTN_SIZE and y >= btnY and y <= btnY + EXIT_BTN_SIZE and button == 1 then
+        -- Exit/cancel: finalize session and go to overview scene
+        self.sessionTracker:finalizeSession()
+        SCENE_MANAGER:switchTo(SCENES.gameOverviewScene, self.sessionTracker:getStats())
+        return
+    end
 
     -- Check if any card was clicked
     if self.currentSet then
