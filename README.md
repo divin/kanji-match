@@ -48,7 +48,7 @@ Kanji Match is an educational game designed to help you master visually similar 
 
 You can download pre-built binaries for **Linux**, **macOS**, and **Windows** from the following pages:
 
-- **[GitHub Releases](https://github.com/divingavran/kanji-match/releases):** Always get the latest version here.
+- **[GitHub Releases](https://github.com/divin/kanji-match/releases):** Always get the latest version here.
   - **Windows:** Download the `.exe` installer or the `.zip` portable version.
   - **macOS:** Download the `.app.zip` for a drag-and-drop app, or `.dmg` for disk image install.
   - **Linux:** Download the `.AppImage` for a single-file app, or `.tar.gz` for manual extraction.
