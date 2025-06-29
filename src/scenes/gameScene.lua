@@ -105,13 +105,9 @@ function GameScene:_setupMatchingCallbacks()
         end,
 
         onMatch = function(cardA, cardB)
-            print("Matched!", cardA.text, cardB.text)
-
             -- Record correct match and get new pitch
             self.sessionTracker:recordCorrectMatch(cardA.pairId)
             local newPitch = self.sessionTracker:getAudioPitch()
-
-            print("Streak: " .. self.sessionTracker:getStreak() .. ", Pitch: " .. string.format("%.2f", newPitch))
 
             -- Apply pitch and play correct sound
             assert(SOUND_SOURCES.correct, "SOUND_SOURCES.correct is required")
@@ -128,11 +124,8 @@ function GameScene:_setupMatchingCallbacks()
         end,
 
         onMismatch = function(cardA, cardB, isFirstFailure)
-            print("No match:", cardA.text, cardB.text)
-
             -- Record incorrect match and handle streak reset
             self.sessionTracker:recordIncorrectMatch(cardA.pairId)
-            print("Streak reset to " .. self.sessionTracker:getStreak())
 
             -- Reset pitch to base value
             SOUND_SOURCES.correct:setPitch(self.sessionTracker:getBasePitch())
@@ -144,14 +137,10 @@ function GameScene:_setupMatchingCallbacks()
             -- Update SRS state for failed match only if first failure in this set
             if isFirstFailure then
                 self:updateSRSState(cardA.pairId, false)
-                print("First failure for " .. cardA.pairId .. " - SRS updated")
-            else
-                print("Already failed " .. cardA.pairId .. " in this set - SRS not updated")
             end
         end,
 
         onSetComplete = function()
-            print("All cards matched! Loading next set/group...")
             -- Save SRS states after completing a set
             self.reviewer:saveSRSState()
 
@@ -184,13 +173,11 @@ end
 function GameScene:loadNextGroup()
     -- Check if we have due groups to review
     if #self.dueGroups == 0 then
-        print("No groups due for review!")
         return
     end
 
     -- Check if we have more groups
     if self.currentIndex > #self.dueGroups then
-        print("All due groups completed!")
         return
     end
 
@@ -206,9 +193,6 @@ function GameScene:loadNextGroup()
     assert(dueGroupData.group, "Due group data missing group field")
 
     local kanjiGroup = dueGroupData.group
-    print("Loading group " .. dueGroupData.groupIndex .. " for review: " .. #kanjiGroup .. " kanji (earliest due: " ..
-        (dueGroupData.hasNewKanji and "new kanji" or string.format("%.2f days ago", (os.time() / (24 * 60 * 60)) - dueGroupData.earliestDueDate)) ..
-        ")")
 
     -- Update session stats (do not increment completedGroups here)
     self.sessionTracker:addKanji(#kanjiGroup)
@@ -297,8 +281,6 @@ function GameScene:getDueGroups()
         table.insert(limitedGroups, dueGroups[i])
     end
 
-    print("Found " ..
-        #dueGroups .. " groups due for review, showing " .. #limitedGroups .. " (limited by groupsPerLesson)")
     return limitedGroups
 end
 
@@ -318,8 +300,6 @@ function GameScene:completeSession()
 
     -- Final save of SRS states before completing session
     self.reviewer:saveSRSState()
-
-    print("Session completed! Switching to game overview...")
 
     -- Switch to game overview scene with stats
     SCENE_MANAGER:switchTo(SCENES.gameOverviewScene, self.sessionTracker:getStats())
@@ -344,7 +324,6 @@ function GameScene:loadNextSet()
 
     -- Check if we have more sets in current group
     if self.currentSetIndex > #self.cardSets then
-        print("All sets in group completed!")
         return false
     end
 
@@ -356,9 +335,6 @@ function GameScene:loadNextSet()
 
     -- Reset failed items tracking for new set
     self.matchingLogic:resetFailedItems()
-
-    print("Loading set " .. self.currentSetIndex .. " of " .. #self.cardSets .. " (Group " .. self.currentIndex .. ")")
-    print("Set has " .. #self.currentSet .. " cards")
 
     return true
 end
@@ -373,7 +349,6 @@ function GameScene:onCardClicked(card)
     assert(card.type, "Card type is nil")
     assert(self.currentSet, "Current set is nil when handling card click")
 
-    print("Card clicked:", card.text, "Type:", card.type)
     self.matchingLogic:handleCardClick(card, self.currentSet)
 end
 
