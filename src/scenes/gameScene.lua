@@ -1,4 +1,4 @@
-local Card = require("objects.card")
+local srsUtils = require("utils.srsUtils")
 local BaseScene = require("scenes.baseScene")
 local getKanjiDataForLevel = require("utils.kanjiData")
 local ConfettiCannon = require("objects.confettiCannon")
@@ -16,7 +16,7 @@ local GameScene = BaseScene:new()
 GameScene.__index = GameScene -- For proper method lookup if methods are added after new()
 
 -- Called once when the scene is first loaded.
-function GameScene:enter(...)
+function GameScene:enter(dueGroups, ...)
     -- Validate required globals
     assert(SETTINGS, "SETTINGS global is required")
     assert(SETTINGS.userLevel, "SETTINGS.userLevel is required")
@@ -56,7 +56,11 @@ function GameScene:enter(...)
     self.srsStates = self.reviewer:getStates()
     assert(self.srsStates, "Failed to get SRS states from reviewer")
 
-    self.dueGroups = self:getDueGroups()
+    if dueGroups ~= nil then
+        self.dueGroups = dueGroups
+    else
+        self.dueGroups = self:getDueGroups()
+    end
     assert(self.dueGroups, "Failed to get due groups")
     assert(type(self.dueGroups) == "table", "Due groups must be a table")
 
@@ -219,74 +223,8 @@ end
 
 -- Get groups that are due for review based on worst performing kanji in each group
 function GameScene:getDueGroups()
-    local osTime = os.time()
-    assert(osTime, "Failed to get system time")
-    local currentTime = osTime / (24 * 60 * 60) -- Current time in days since epoch
-    local dueGroups = {}
-
-    assert(self.kanjiData, "Kanji data is nil when getting due groups")
-    for groupIndex, group in ipairs(self.kanjiData) do
-        assert(group, "Group is nil at index " .. groupIndex)
-        local earliestDueDate = math.huge
-        local hasNewKanji = false
-
-        -- Find the earliest due date (worst performing) kanji in this group
-        for _, kanji in ipairs(group) do
-            local state = self.srsStates[kanji.character]
-            if state == nil then
-                -- New kanji, group is immediately due
-                hasNewKanji = true
-                earliestDueDate = currentTime
-                break
-            else
-                local dueDate = state.lastReviewed + state.interval
-                if dueDate < earliestDueDate then
-                    earliestDueDate = dueDate
-                end
-            end
-        end
-
-        -- If the worst performing kanji in the group is due, include the entire group
-        if hasNewKanji or currentTime >= earliestDueDate then
-            table.insert(dueGroups, {
-                groupIndex = groupIndex,
-                group = group,
-                earliestDueDate = earliestDueDate,
-                hasNewKanji = hasNewKanji
-            })
-        end
-    end
-
-    -- Sort groups: due groups (not hasNewKanji) first, then new groups, both by earliest due date
-    table.sort(dueGroups, function(a, b)
-        if not a.hasNewKanji and b.hasNewKanji then
-            return true
-        elseif a.hasNewKanji and not b.hasNewKanji then
-            return false
-        else
-            return a.earliestDueDate < b.earliestDueDate
-        end
-    end)
-
-    -- Limit to groupsPerLesson setting
-    local limitedGroups = {}
-    local maxGroups = SETTINGS.groupsPerLesson or 5
-
-    -- Validate groupsPerLesson setting if provided
-    if SETTINGS.groupsPerLesson then
-        assert(type(SETTINGS.groupsPerLesson) == "number", "SETTINGS.groupsPerLesson must be a number")
-        assert(SETTINGS.groupsPerLesson >= 0, "SETTINGS.groupsPerLesson must be non-negative")
-    end
-
-    -- Ensure at least 1 group is shown if any are available
-    if maxGroups < 1 and #dueGroups > 0 then
-        maxGroups = 1
-    end
-    for i = 1, math.min(#dueGroups, maxGroups) do
-        table.insert(limitedGroups, dueGroups[i])
-    end
-
-    return limitedGroups
+    -- Use the shared SRS utility for due group calculation
+    return srsUtils.getDueGroups(self.kanjiData, self.srsStates, SETTINGS)
 end
 
 -- Auto-save SRS states periodically during gameplay
