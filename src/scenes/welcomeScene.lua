@@ -3,6 +3,14 @@ local BaseScene = require("scenes.baseScene")
 local WaniKani = require("objects.wanikani")
 local roundRect = require("libs.roundRect")
 
+--- Cleans up the API token by removing unnecessary whitespace.
+--- @param token string The API token string to clean.
+--- @return string The cleaned API token string.
+local function cleanToken(token)
+    -- Remove spaces, tabs, newlines, carriage returns, and other common whitespace
+    return (token:gsub("[%s\r\n]", ""))
+end
+
 
 local WelcomeScene = BaseScene:new()
 WelcomeScene.__index = WelcomeScene
@@ -139,12 +147,13 @@ function WelcomeScene:keypressed(key)
         end
     elseif key == "return" or key == "enter" then
         -- Validate input first
-        if self.text == "" or utf8.len(self.text) < 10 then
+        local cleanedToken = cleanToken(self.text)
+        if cleanedToken == "" or utf8.len(cleanedToken) < 10 then
             self:showErrorMessage("Please enter a valid API token (at least 10 characters)")
             return
         end
 
-        local wanikani = WaniKani:new(self.text)
+        local wanikani = WaniKani:new(cleanedToken)
         wanikani:getUserInfo(function(success, userInfo)
             if success then
                 -- Check if subscription is active
@@ -155,7 +164,7 @@ function WelcomeScene:keypressed(key)
                 end
 
                 SETTINGS.isValidToken = true
-                SETTINGS.apiToken = self.text
+                SETTINGS.apiToken = cleanedToken
                 SETTINGS.userLevel = userInfo.level
                 SETTINGS.activeSubscription = userInfo.subscription.active
                 SETTINGS.maxGrantedLevel = userInfo.subscription.max_level_granted
