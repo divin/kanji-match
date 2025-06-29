@@ -20,6 +20,7 @@ function GameOverviewScene:enter(stats)
     -- Play success sound when entering overview scene
     if SOUND_SOURCES and SOUND_SOURCES.success then
         love.audio.stop(SOUND_SOURCES.success)
+        SOUND_SOURCES.success:setVolume(SETTINGS.soundEffectVolume / 10)
         love.audio.play(SOUND_SOURCES.success)
     end
 

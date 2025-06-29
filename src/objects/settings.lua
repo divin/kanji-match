@@ -12,6 +12,8 @@ function Settings:new(font)
     instance.isValidToken = false
     instance.activeSubscription = false
     instance.maxGrantedLevel = 1
+    instance.soundEffectVolume = 5 -- Default: 5 (range 0-10)
+    instance.confettiAmount = 50   -- Default: 50 (range 0-100)
     return instance
 end
 

@@ -82,8 +82,9 @@ function GameScene:enter(...)
     self.streakFont = love.graphics.newFont(SETTINGS.font, 24)
     assert(self.streakFont, "Failed to create streak font")
 
-    -- Initialize confetti cannon
-    self.confettiCannon = ConfettiCannon:new()
+    -- Initialize confetti cannon with confetti amount from settings
+    local confettiAmount = SETTINGS.confettiAmount
+    self.confettiCannon = ConfettiCannon:new(0, confettiAmount, nil, nil, nil, nil)
     assert(self.confettiCannon, "Failed to create ConfettiCannon object")
 
     self:loadNextGroup()
@@ -95,12 +96,14 @@ function GameScene:_setupMatchingCallbacks()
         onCardSelected = function(card)
             assert(SOUND_SOURCES.click, "SOUND_SOURCES.click is required")
             love.audio.stop(SOUND_SOURCES.click)
+            SOUND_SOURCES.click:setVolume(SETTINGS.soundEffectVolume / 10)
             love.audio.play(SOUND_SOURCES.click)
         end,
 
         onCardDeselected = function(card)
             assert(SOUND_SOURCES.unclick, "SOUND_SOURCES.unclick is required")
             love.audio.stop(SOUND_SOURCES.unclick)
+            SOUND_SOURCES.unclick:setVolume(SETTINGS.soundEffectVolume / 10)
             love.audio.play(SOUND_SOURCES.unclick)
         end,
 
@@ -114,6 +117,7 @@ function GameScene:_setupMatchingCallbacks()
             love.audio.stop(SOUND_SOURCES.click)
             love.audio.stop(SOUND_SOURCES.correct)
             SOUND_SOURCES.correct:setPitch(newPitch)
+            SOUND_SOURCES.correct:setVolume(SETTINGS.soundEffectVolume / 10)
             love.audio.play(SOUND_SOURCES.correct)
 
             -- Create confetti explosion
@@ -132,6 +136,7 @@ function GameScene:_setupMatchingCallbacks()
 
             assert(SOUND_SOURCES.incorrect, "SOUND_SOURCES.incorrect is required")
             love.audio.stop(SOUND_SOURCES.incorrect)
+            SOUND_SOURCES.incorrect:setVolume(SETTINGS.soundEffectVolume / 10)
             love.audio.play(SOUND_SOURCES.incorrect)
 
             -- Update SRS state for failed match only if first failure in this set

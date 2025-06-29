@@ -85,6 +85,46 @@ function SettingsScene:setupButtons(centerX, startY)
     }
     yOffset = yOffset + self.buttonHeight + self.buttonSpacing * 2
 
+    -- Sound Effect Volume setting
+    self.soundSection = {
+        y = startY + yOffset,
+        minusButton = {
+            x = centerX - 180,
+            y = startY + yOffset,
+            width = self.smallButtonWidth,
+            height = self.smallButtonHeight,
+            hovered = false
+        },
+        plusButton = {
+            x = centerX + 140,
+            y = startY + yOffset,
+            width = self.smallButtonWidth,
+            height = self.smallButtonHeight,
+            hovered = false
+        }
+    }
+    yOffset = yOffset + self.buttonHeight + self.buttonSpacing
+
+    -- Confetti Amount setting
+    self.confettiSection = {
+        y = startY + yOffset,
+        minusButton = {
+            x = centerX - 180,
+            y = startY + yOffset,
+            width = self.smallButtonWidth,
+            height = self.smallButtonHeight,
+            hovered = false
+        },
+        plusButton = {
+            x = centerX + 140,
+            y = startY + yOffset,
+            width = self.smallButtonWidth,
+            height = self.smallButtonHeight,
+            hovered = false
+        }
+    }
+    yOffset = yOffset + self.buttonHeight + self.buttonSpacing
+
     -- Reset data button
     self.resetButton = {
         x = centerX - self.buttonWidth / 2,
@@ -173,6 +213,20 @@ function SettingsScene:mousemoved(x, y, dx, dy, istouch)
         font.nextButton.hovered = x >= font.nextButton.x and x <= font.nextButton.x + font.nextButton.width and
             y >= font.nextButton.y and y <= font.nextButton.y + font.nextButton.height
 
+        local sound = self.soundSection
+        sound.minusButton.hovered = x >= sound.minusButton.x and x <= sound.minusButton.x + sound.minusButton.width and
+            y >= sound.minusButton.y and y <= sound.minusButton.y + sound.minusButton.height
+        sound.plusButton.hovered = x >= sound.plusButton.x and x <= sound.plusButton.x + sound.plusButton.width and
+            y >= sound.plusButton.y and y <= sound.plusButton.y + sound.plusButton.height
+
+        local confetti = self.confettiSection
+        confetti.minusButton.hovered = x >= confetti.minusButton.x and
+            x <= confetti.minusButton.x + confetti.minusButton.width and
+            y >= confetti.minusButton.y and y <= confetti.minusButton.y + confetti.minusButton.height
+        confetti.plusButton.hovered = x >= confetti.plusButton.x and
+            x <= confetti.plusButton.x + confetti.plusButton.width and
+            y >= confetti.plusButton.y and y <= confetti.plusButton.y + confetti.plusButton.height
+
         self.resetButton.hovered = x >= self.resetButton.x and x <= self.resetButton.x + self.resetButton.width and
             y >= self.resetButton.y and y <= self.resetButton.y + self.resetButton.height
 
@@ -201,6 +255,18 @@ function SettingsScene:mousepressed(x, y, button, istouch, presses)
                 self:previousFont()
             elseif self.fontSection.nextButton.hovered then
                 self:nextFont()
+            elseif self.soundSection.minusButton.hovered then
+                SETTINGS.soundEffectVolume = math.max(0, (SETTINGS.soundEffectVolume or 0) - 1)
+                SETTINGS:save()
+            elseif self.soundSection.plusButton.hovered then
+                SETTINGS.soundEffectVolume = math.min(10, (SETTINGS.soundEffectVolume or 0) + 1)
+                SETTINGS:save()
+            elseif self.confettiSection.minusButton.hovered then
+                SETTINGS.confettiAmount = math.max(0, (SETTINGS.confettiAmount or 0) - 5)
+                SETTINGS:save()
+            elseif self.confettiSection.plusButton.hovered then
+                SETTINGS.confettiAmount = math.min(100, (SETTINGS.confettiAmount or 0) + 5)
+                SETTINGS:save()
             elseif self.resetButton.hovered then
                 self:showResetConfirmation()
             elseif self.backButton.hovered then
@@ -347,6 +413,57 @@ function SettingsScene:drawMainSettings(labelFont, buttonFont, smallButtonFont)
     roundRect("line", nextBtn.x, nextBtn.y, nextBtn.width, nextBtn.height, 8, 8)
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf(">", nextBtn.x, nextBtn.y + 8, nextBtn.width, "center")
+
+    -- Sound Effect Volume setting
+    love.graphics.setFont(labelFont)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.printf("Sound Effect Volume: " .. tostring(SETTINGS.soundEffectVolume or 0), 0,
+        self.soundSection.y + 15,
+        love.graphics.getWidth(), "center")
+
+    local soundMinusBtn = self.soundSection.minusButton
+    love.graphics.setColor(soundMinusBtn.hovered and 0.7 or 0.5, soundMinusBtn.hovered and 0.7 or 0.5,
+        soundMinusBtn.hovered and 0.9 or 0.7, 1)
+    roundRect("fill", soundMinusBtn.x, soundMinusBtn.y, soundMinusBtn.width, soundMinusBtn.height, 8, 8)
+    love.graphics.setColor(0.3, 0.3, 0.5, 1)
+    roundRect("line", soundMinusBtn.x, soundMinusBtn.y, soundMinusBtn.width, soundMinusBtn.height, 8, 8)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.setFont(smallButtonFont)
+    love.graphics.printf("-", soundMinusBtn.x, soundMinusBtn.y + 8, soundMinusBtn.width, "center")
+
+    local soundPlusBtn = self.soundSection.plusButton
+    love.graphics.setColor(soundPlusBtn.hovered and 0.7 or 0.5, soundPlusBtn.hovered and 0.7 or 0.5,
+        soundPlusBtn.hovered and 0.9 or 0.7, 1)
+    roundRect("fill", soundPlusBtn.x, soundPlusBtn.y, soundPlusBtn.width, soundPlusBtn.height, 8, 8)
+    love.graphics.setColor(0.3, 0.3, 0.5, 1)
+    roundRect("line", soundPlusBtn.x, soundPlusBtn.y, soundPlusBtn.width, soundPlusBtn.height, 8, 8)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.printf("+", soundPlusBtn.x, soundPlusBtn.y + 8, soundPlusBtn.width, "center")
+
+    -- Confetti Amount setting
+    love.graphics.setFont(labelFont)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.printf("Confetti Amount: " .. tostring(SETTINGS.confettiAmount or 0), 0, self.confettiSection.y + 15,
+        love.graphics.getWidth(), "center")
+
+    local confettiMinusBtn = self.confettiSection.minusButton
+    love.graphics.setColor(confettiMinusBtn.hovered and 0.7 or 0.5, confettiMinusBtn.hovered and 0.7 or 0.5,
+        confettiMinusBtn.hovered and 0.9 or 0.7, 1)
+    roundRect("fill", confettiMinusBtn.x, confettiMinusBtn.y, confettiMinusBtn.width, confettiMinusBtn.height, 8, 8)
+    love.graphics.setColor(0.3, 0.3, 0.5, 1)
+    roundRect("line", confettiMinusBtn.x, confettiMinusBtn.y, confettiMinusBtn.width, confettiMinusBtn.height, 8, 8)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.setFont(smallButtonFont)
+    love.graphics.printf("-", confettiMinusBtn.x, confettiMinusBtn.y + 8, confettiMinusBtn.width, "center")
+
+    local confettiPlusBtn = self.confettiSection.plusButton
+    love.graphics.setColor(confettiPlusBtn.hovered and 0.7 or 0.5, confettiPlusBtn.hovered and 0.7 or 0.5,
+        confettiPlusBtn.hovered and 0.9 or 0.7, 1)
+    roundRect("fill", confettiPlusBtn.x, confettiPlusBtn.y, confettiPlusBtn.width, confettiPlusBtn.height, 8, 8)
+    love.graphics.setColor(0.3, 0.3, 0.5, 1)
+    roundRect("line", confettiPlusBtn.x, confettiPlusBtn.y, confettiPlusBtn.width, confettiPlusBtn.height, 8, 8)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.printf("+", confettiPlusBtn.x, confettiPlusBtn.y + 8, confettiPlusBtn.width, "center")
 
     -- Reset data button
     love.graphics.setColor(self.resetButton.hovered and 0.9 or 0.7, self.resetButton.hovered and 0.4 or 0.2,
