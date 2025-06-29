@@ -7,7 +7,7 @@ function Settings:new(font)
     local instance = setmetatable({}, Settings)
     instance.userLevel = 1
     instance.font = font or love.graphics.getFont()
-    instance.groupsPerLesson = 5
+    instance.groupsPerLesson = 15
     instance.apiToken = ""
     instance.isValidToken = false
     instance.activeSubscription = false
