@@ -124,7 +124,7 @@ local function handleReviewPhase(previous, evaluation)
         -- Failed review
         local result = handleFailure()
         local efactor = math.max(
-            srsConstants.minEFactor,
+            srsConstants.MIN_EFACTOR,
             previous.efactor - srsConstants.EFACTOR_REDUCTION_ON_FAIL
         )
         result.efactor = efactor
